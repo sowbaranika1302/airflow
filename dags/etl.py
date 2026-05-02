@@ -2,12 +2,12 @@ from airflow import DAG
 from airflow.providers.http.operators.http import HttpOperator
 from airflow.decorators import task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from datetime import datetime, timedelta
+from datetime import datetime
 import json
 # Automatically handles the creation of tasks and dependencies and closes the DAG context after the function is executed
 with DAG(
     dag_id = "Nasa_Asteroid_ETL",
-    start_date = datetime.utcnow(),
+    start_date = datetime(2026, 5, 1),
     schedule = "@daily",
     catchup = False
 ) as dag:
