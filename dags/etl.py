@@ -7,7 +7,7 @@ import json
 # Automatically handles the creation of tasks and dependencies and closes the DAG context after the function is executed
 with DAG(
     dag_id = "Nasa_Asteroid_ETL",
-    start_date = datetime.utcnow() - timedelta(days=1),
+    start_date = datetime.utcnow(),
     schedule = "@daily",
     catchup = False
 ) as dag:
