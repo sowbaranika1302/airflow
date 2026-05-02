@@ -1,32 +1,146 @@
-# Project Overview
+# 🚀 NASA Asteroid ETL — Apache Airflow Pipeline
 
-Building Extract, Transform, and Load (ETL) workloads is a common pattern in Apache Airflow. This template shows an example pattern for defining an ETL workload using DuckDB as the data warehouse of choice.
+An Apache Airflow DAG that extracts NASA's **Astronomy Picture of the Day (APOD)** data from the NASA API, transforms it, and loads it into a PostgreSQL database on a daily schedule.
 
-Astronomer is the best place to host Apache Airflow -- try it out with a free trial at [astronomer.io](https://www.astronomer.io/).
+---
 
-# Learning Paths
+## 📋 Overview
 
-To learn more about data engineering with Apache Airflow, make a few changes to this project! For example, try one of the following:
+This pipeline automates the daily ingestion of NASA APOD data using an ETL (Extract, Transform, Load) workflow. Despite the DAG ID referencing "asteroids," this pipeline specifically targets the APOD endpoint, storing each day's featured astronomy image metadata into a PostgreSQL table.
 
-1. Changing the data warehouse to a different provider (Snowflake, AWS Redshift, etc.)
-2. Adding a different data source and integrating it with this ETL project
-3. Adding the [EmailOperator](https://registry.astronomer.io/providers/apache-airflow/versions/2.8.1/modules/EmailOperator) to the project and notifying a user on job completion
+**Pipeline Steps:**
+1. Create the target PostgreSQL table (if it doesn't already exist)
+2. Extract data from the NASA APOD API
+3. Transform the raw API response into a structured format
+4. Load the transformed data into PostgreSQL
 
-# Project Contents
+---
 
-Your Astro project contains the following files and folders:
+## 🗂️ Project Structure
 
-- dags: This folder contains the Python files for your Airflow DAGs. By default, this directory includes two example DAGs:
-  - `example_etl_galaxies`: This example demonstrates an ETL pipeline using Airflow. The pipeline extracts data about galaxies, filters the data based on the distance from the Milky Way, and loads the filtered data into a DuckDB database.
-- Dockerfile: This file contains a versioned Astro Runtime Docker image that provides a differentiated Airflow experience. If you want to execute other commands or overrides at runtime, specify them here.
-- include: This folder contains any additional files that you want to include as part of your project. It is empty by default.
-- packages.txt: Install OS-level packages needed for your project by adding them to this file. It is empty by default.
-- requirements.txt: Install Python packages needed for your project by adding them to this file. It is empty by default.
-- plugins: Add custom or community plugins for your project to this file. It is empty by default.
-- airflow_settings.yaml: Use this local-only file to specify Airflow Connections, Variables, and Pools instead of entering them in the Airflow UI as you develop DAGs in this project.
+```
+.
+├── dags/
+│   └── nasa_asteroid_etl.py   # Main Airflow DAG
+└── README.md
+```
 
-# Deploying to Production
+---
 
-### ❗Warning❗
+## ⚙️ Prerequisites
 
-This template used DuckDB, an in-memory database, for running dbt transformations. While this is great to learn Airflow, your data is not guaranteed to persist between executions! For production applications, use a _persistent database_ instead (consider DuckDB's hosted option MotherDuck or another database like Postgres, MySQL, or Snowflake).
+- Python 3.8+
+- Apache Airflow 2.x
+- PostgreSQL database
+- The following Airflow providers:
+  - `apache-airflow-providers-http`
+  - `apache-airflow-providers-postgres`
+
+Install the providers with:
+```bash
+pip install apache-airflow-providers-http apache-airflow-providers-postgres
+```
+
+---
+
+## 🔌 Airflow Connections
+
+Configure the following connections in the Airflow UI (**Admin → Connections**):
+
+### 1. NASA API Connection
+| Field        | Value                              |
+|--------------|------------------------------------|
+| Connection ID | `nasa_api`                        |
+| Connection Type | `HTTP`                          |
+| Host         | `https://api.nasa.gov`             |
+| Extras (JSON) | `{"api_key": "YOUR_NASA_API_KEY"}` |
+
+> Get your free API key at [https://api.nasa.gov](https://api.nasa.gov)
+
+### 2. PostgreSQL Connection
+| Field         | Value                    |
+|---------------|--------------------------|
+| Connection ID | `postgres_connection`    |
+| Connection Type | `Postgres`             |
+| Host          | `your_postgres_host`     |
+| Schema        | `your_database_name`     |
+| Login         | `your_username`          |
+| Password      | `your_password`          |
+| Port          | `5432`                   |
+
+---
+
+## 🗄️ Database Schema
+
+The DAG automatically creates the following table on first run:
+
+```sql
+CREATE TABLE IF NOT EXISTS asteroids (
+    id         SERIAL PRIMARY KEY,
+    name       VARCHAR(255),
+    explanation TEXT,
+    url        TEXT,
+    date       DATE,
+    media_type VARCHAR(50)
+);
+```
+
+---
+
+## 🔄 DAG Configuration
+
+| Property       | Value              |
+|----------------|--------------------|
+| DAG ID         | `Nasa_Asteroid_ETL` |
+| Schedule       | `@daily`           |
+| Start Date     | `2026-05-01`       |
+| Catchup        | `False`            |
+
+---
+
+## 🧩 Task Breakdown
+
+| Task                  | Type              | Description                                        |
+|-----------------------|-------------------|----------------------------------------------------|
+| `create_asteroid_table` | `@task` (Python) | Creates the `asteroids` table if it doesn't exist  |
+| `extract_apod`        | `HttpOperator`    | Calls the NASA APOD API and returns JSON response  |
+| `transform_apod_data` | `@task` (Python)  | Maps API fields to the database schema             |
+| `load_apod_data`      | `@task` (Python)  | Inserts the transformed record into PostgreSQL     |
+
+### Task Dependency Graph
+
+```
+create_asteroid_table >> extract_apod >> transform_apod_data >> load_apod_data
+```
+
+---
+
+## 🚀 Getting Started
+
+1. **Clone the repository** and place the DAG file in your Airflow `dags/` folder.
+
+2. **Configure connections** in the Airflow UI as described above.
+
+3. **Enable the DAG** in the Airflow UI and trigger a manual run to verify the setup:
+   ```bash
+   airflow dags trigger Nasa_Asteroid_ETL
+   ```
+
+4. **Verify the data** by querying your PostgreSQL database:
+   ```sql
+   SELECT * FROM asteroids ORDER BY date DESC LIMIT 10;
+   ```
+
+---
+
+## 🛠️ Troubleshooting
+
+- **API key errors:** Confirm the `nasa_api` connection Extras JSON is valid and the key is active.
+- **PostgreSQL connection failures:** Check that `postgres_connection` credentials and host are correct, and that the Airflow worker can reach the database.
+- **Empty `url` fields:** APOD occasionally returns video content. The `url` will still be populated, but `media_type` will be `video` instead of `image`.
+
+---
+
+## 📄 License
+
+This project is open-source and available under the [MIT License](LICENSE).
